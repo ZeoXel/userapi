@@ -81,22 +81,49 @@
 
 ---
 
+## Phase 5 ✅ 已完成 - 多认证源支持
+
+### 目标
+支持 Authing (个人版) 和腾讯云 (公司版) 两种登录方式，共用同一个 Supabase 数据库。
+
+### 已完成
+- [x] 迁移数据库到 Supabase (PostgreSQL)
+- [x] 修改用户表结构支持多认证源 (provider, provider_id)
+- [x] 更新 Drizzle schema
+- [x] 创建用户同步 API (`/api/user/sync`)
+- [x] 更新用户查询 API (`/api/user/me`)
+- [x] 测试 Authing 用户同步
+- [x] 测试腾讯云用户同步
+
+### 测试结果
+- Authing 用户创建: ✅ 成功 (自动分配 API Key)
+- Authing 用户更新: ✅ 成功 (保留已有 Key)
+- 腾讯云用户创建: ✅ 成功
+- API Key 认证查询: ✅ 成功
+- Provider 查询: ✅ 成功
+
+---
+
 ## 技术决策
 
 | 决策 | 选择 | 理由 |
 |------|------|------|
 | 框架 | Next.js 15 | 与 Studio 一致 |
-| 数据库 | SQLite + Drizzle | 轻量无依赖 |
+| 数据库 | Supabase PostgreSQL | 云端托管、多项目共享 |
+| ORM | Drizzle | 类型安全、轻量 |
 | 路由模式 | 路径前缀 | 清晰明确 |
 | 管理界面 | 同步开发 | 每阶段配套 |
+| 多认证 | provider + provider_id | 支持任意认证源扩展 |
 
 ---
 
 ## 错误记录
 
-(暂无)
+| 错误 | 解决方案 |
+|------|----------|
+| Supabase Transaction Pooler 连接失败 | 改用直连模式 (port 5432) |
 
 ---
 
 ## 状态
-**All Phases Complete** - 核心功能、用户管理、配额监控、UI 优化全部完成
+**Phase 5 Complete** - 多认证源用户系统已完成，支持 Authing/腾讯云/手动创建

@@ -1,11 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import {
   Users,
   Plus,
-  Key,
   Trash2,
   AlertCircle,
   X,
@@ -20,13 +18,25 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 
+interface ApiKeyInfo {
+  keyPrefix: string;
+  status: string;
+  quotaType: string;
+  quotaUsed: number | null;
+  quotaLimit: number | null;
+  lastUsedAt: string | null;
+}
+
 interface User {
   id: string;
   name: string;
   email: string | null;
+  phone: string | null;
+  provider: string;
   role: string;
   status: string;
   createdAt: string;
+  apiKey: ApiKeyInfo | null;
 }
 
 export default function UsersPage() {
@@ -221,7 +231,10 @@ export default function UsersPage() {
                       用户
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      邮箱
+                      联系方式
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      API Key
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       角色
@@ -256,8 +269,34 @@ export default function UsersPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.email || '-'}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm">
+                          {user.phone && (
+                            <div className="text-gray-900">{user.phone}</div>
+                          )}
+                          {user.email && (
+                            <div className="text-gray-500 text-xs">{user.email}</div>
+                          )}
+                          {!user.phone && !user.email && (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {user.apiKey ? (
+                          <div className="flex items-center gap-2">
+                            <code className="px-2 py-1 bg-gray-100 rounded text-xs font-mono text-gray-700">
+                              {user.apiKey.keyPrefix}
+                            </code>
+                            {user.apiKey.status !== 'active' && (
+                              <Badge variant="error" className="text-xs">
+                                {user.apiKey.status}
+                              </Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">未分配</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Badge variant={user.role === 'admin' ? 'info' : 'neutral'}>
@@ -290,28 +329,19 @@ export default function UsersPage() {
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <Link
-                            href={`/dashboard/keys?userId=${user.id}`}
-                            className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                            title="管理 Key"
-                          >
-                            <Key className="w-4 h-4" />
-                          </Link>
-                          <button
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
-                            title="删除"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                          title="删除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}
                   {users.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                         <Users className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                         <p>暂无用户，点击「新建用户」创建</p>
                       </td>

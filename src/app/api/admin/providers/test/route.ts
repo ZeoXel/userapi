@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getProviders, type ProviderConfig } from '@/lib/proxy/router';
+import { getProviders, type Provider } from '@/lib/proxy/router';
 
 function verifyAdmin(request: NextRequest): boolean {
   const authHeader = request.headers.get('Authorization');
@@ -18,7 +18,7 @@ interface TestResult {
   error?: string;
 }
 
-async function testProvider(provider: ProviderConfig): Promise<TestResult> {
+async function testProvider(provider: Provider): Promise<TestResult> {
   const apiKey = process.env[provider.auth.env_key];
 
   if (!apiKey) {

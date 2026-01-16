@@ -40,7 +40,7 @@ export default function DashboardPage() {
   const fetchStats = async () => {
     try {
       // 并行请求所有数据
-      const headers = adminKey ? { Authorization: `Bearer ${adminKey}` } : {};
+      const headers: Record<string, string> = adminKey ? { Authorization: `Bearer ${adminKey}` } : {};
 
       const [providersRes, usersRes, keysRes, usageRes] = await Promise.all([
         adminKey

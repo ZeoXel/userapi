@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Server,
   Users,
-  Key,
   BarChart3,
   Settings,
   X,
@@ -23,7 +22,6 @@ const navItems = [
   { href: '/dashboard', label: '概览', icon: LayoutDashboard },
   { href: '/dashboard/providers', label: '厂商', icon: Server },
   { href: '/dashboard/users', label: '用户', icon: Users },
-  { href: '/dashboard/keys', label: 'Keys', icon: Key },
   { href: '/dashboard/usage', label: '使用统计', icon: BarChart3 },
 ];
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, users } from '@/lib/db';
+import { db, users, apiKeys } from '@/lib/db';
 import { nanoid } from 'nanoid';
 import { eq } from 'drizzle-orm';
 
@@ -15,15 +15,42 @@ function verifyAdmin(request: NextRequest): boolean {
   return match[1] === adminKey;
 }
 
-// GET /api/admin/users - 获取用户列表
+// GET /api/admin/users - 获取用户列表（包含密钥信息）
 export async function GET(request: NextRequest) {
   if (!verifyAdmin(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
+    // 查询用户并 LEFT JOIN 密钥信息
     const allUsers = await db.select().from(users);
-    return NextResponse.json({ users: allUsers });
+    const allKeys = await db.select({
+      userId: apiKeys.userId,
+      keyPrefix: apiKeys.keyPrefix,
+      status: apiKeys.status,
+      quotaType: apiKeys.quotaType,
+      quotaUsed: apiKeys.quotaUsed,
+      quotaLimit: apiKeys.quotaLimit,
+      lastUsedAt: apiKeys.lastUsedAt,
+    }).from(apiKeys);
+
+    // 将密钥信息合并到用户数据
+    const usersWithKeys = allUsers.map(user => {
+      const userKey = allKeys.find(k => k.userId === user.id);
+      return {
+        ...user,
+        apiKey: userKey ? {
+          keyPrefix: userKey.keyPrefix,
+          status: userKey.status,
+          quotaType: userKey.quotaType,
+          quotaUsed: userKey.quotaUsed,
+          quotaLimit: userKey.quotaLimit,
+          lastUsedAt: userKey.lastUsedAt,
+        } : null,
+      };
+    });
+
+    return NextResponse.json({ users: usersWithKeys });
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to fetch users', detail: String(error) },
@@ -32,7 +59,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/admin/users - 创建用户
+// POST /api/admin/users - 创建用户 (管理员手动创建)
 export async function POST(request: NextRequest) {
   if (!verifyAdmin(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -40,7 +67,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, email, role = 'user' } = body;
+    const { name, email, phone, role = 'user' } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -50,10 +77,15 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
+    const id = nanoid();
     const newUser = {
-      id: nanoid(),
+      id,
+      provider: 'manual', // 管理员手动创建
+      providerId: id,     // 使用自身ID作为provider_id
       name,
       email: email || null,
+      phone: phone || null,
+      avatar: null,
       role,
       status: 'active',
       createdAt: now,
@@ -65,9 +97,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ user: newUser }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('UNIQUE constraint failed')) {
+    if (message.includes('unique') || message.includes('UNIQUE')) {
       return NextResponse.json(
-        { error: 'Email already exists' },
+        { error: 'User already exists' },
         { status: 409 }
       );
     }

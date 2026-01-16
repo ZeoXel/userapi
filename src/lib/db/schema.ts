@@ -1,10 +1,17 @@
 import { pgTable, text, integer, real, timestamp } from 'drizzle-orm/pg-core';
 
-// 用户表
+// 用户表 - 支持多认证源
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
+  // 认证源信息
+  provider: text('provider').notNull(), // 'authing', 'tencent', 'manual'
+  providerId: text('provider_id').notNull(), // 第三方用户ID
+  // 用户信息
   name: text('name').notNull(),
-  email: text('email').unique(),
+  email: text('email'),
+  phone: text('phone'),
+  avatar: text('avatar'),
+  // 业务字段
   role: text('role').default('user'), // admin, user
   status: text('status').default('active'), // active, suspended
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
