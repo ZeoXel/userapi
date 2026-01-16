@@ -1,0 +1,55 @@
+# USERAPI 透传网关 - 厂商配置
+#
+# 添加新厂商只需在此文件添加配置项
+# 无需修改任何代码
+
+providers:
+  vidu:
+    name: "Vidu 视频生成"
+    base_url: "https://api.vidu.cn"
+    auth:
+      type: "token"
+      header: "Authorization"
+      prefix: "Token "
+      env_key: "VIDU_API_KEY"
+    description: "字节跳动 Vidu 视频生成服务"
+
+  volcengine:
+    name: "火山引擎"
+    base_url: "https://ark.cn-beijing.volces.com/api/v3"
+    auth:
+      type: "bearer"
+      header: "Authorization"
+      prefix: "Bearer "
+      env_key: "VOLCENGINE_API_KEY"
+    description: "火山引擎 Seedance/Seedream 服务"
+
+  openai:
+    name: "OpenAI 兼容网关"
+    base_url: "https://api.bltcy.ai"
+    auth:
+      type: "bearer"
+      header: "Authorization"
+      prefix: "Bearer "
+      env_key: "OPENAI_API_KEY"
+    description: "OpenAI 兼容 API 网关 (Veo, LLM 等)"
+
+  minimax:
+    name: "MiniMax"
+    base_url: "https://api.minimax.chat"
+    auth:
+      type: "bearer"
+      header: "Authorization"
+      prefix: "Bearer "
+      env_key: "MINIMAX_API_KEY"
+    description: "MiniMax TTS 语音合成"
+
+  suno:
+    name: "Suno"
+    base_url: "https://api.bltcy.ai"
+    auth:
+      type: "bearer"
+      header: "Authorization"
+      prefix: "Bearer "
+      env_key: "SUNO_API_KEY"
+    description: "Suno 音乐生成"
