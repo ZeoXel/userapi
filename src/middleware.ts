@@ -3,11 +3,15 @@ import type { NextRequest } from 'next/server';
 
 // 允许的源
 const allowedOrigins = [
+    // 本地开发
     'http://localhost:3000',
     'http://localhost:3001',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:3001',
-    // 生产环境域名可以在这里添加
+    // 生产环境
+    'https://canvas.zeoxel.cn',
+    'https://api.zeoxel.cn',
+    'https://zeoxel.cn',
 ];
 
 export function middleware(request: NextRequest) {
