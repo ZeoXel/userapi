@@ -101,6 +101,8 @@ export async function POST(request: NextRequest) {
     const newKey = {
       id: prefix.replace('ua_', 'key_'),
       userId,
+      userName: user[0].name, // 冗余字段
+      userPhone: user[0].phone, // 冗余字段
       keyHash: hash,
       keyPrefix: prefix,
       name: name || null,

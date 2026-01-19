@@ -1,0 +1,72 @@
+# 积分定价配置
+# 基础单位：1 积分 = 0.01 元
+
+# 视频生成
+video:
+  vidu:
+    # 按时长计费（秒）
+    viduq1:
+      per_second: 5        # 5 积分/秒
+      min_charge: 20       # 最低 20 积分
+    viduq2:
+      per_second: 8
+      min_charge: 32
+    viduq2-pro:
+      per_second: 15
+      min_charge: 60
+  minimax:
+    video-01:
+      per_second: 10
+      min_charge: 40
+    video-01-hd:
+      per_second: 20
+      min_charge: 80
+
+# 图像生成
+image:
+  volcengine:
+    # 按张计费
+    doubao-seedream-3-0-t2i-250415:
+      per_image: 2         # 2 积分/张
+    doubao-seedream-3-0-i2i-250415:
+      per_image: 3
+  openai:
+    dall-e-3:
+      standard:
+        1024x1024: 8
+        1024x1792: 12
+        1792x1024: 12
+      hd:
+        1024x1024: 16
+        1024x1792: 24
+        1792x1024: 24
+
+# 音频生成
+audio:
+  suno:
+    # 按首计费
+    chirp-v4:
+      per_song: 20
+    chirp-v3:
+      per_song: 15
+
+# 对话/文本
+chat:
+  openai:
+    # 按 token 计费（每 1K tokens）
+    gpt-4o:
+      input_per_1k: 1
+      output_per_1k: 3
+    gpt-4o-mini:
+      input_per_1k: 0.1
+      output_per_1k: 0.3
+  volcengine:
+    doubao-1-5-pro-256k:
+      input_per_1k: 0.4
+      output_per_1k: 1.2
+
+# 全局倍率（促销/加价）
+multipliers:
+  default: 1.0           # 默认倍率
+  # vip: 0.8             # VIP 用户 8 折
+  # peak_hours: 1.2      # 高峰时段 1.2 倍

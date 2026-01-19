@@ -9,12 +9,13 @@ if (!connectionString) {
   throw new Error('DATABASE_URL environment variable is required');
 }
 
-// 创建 PostgreSQL 连接 (Session Pooler 支持 prepared statements)
+// 创建 PostgreSQL 连接 (Serverless + Supabase Pooler)
 const client = postgres(connectionString, {
   ssl: 'require',
-  connection: {
-    options: '-c timezone=UTC',
-  },
+  max: 1,
+  idle_timeout: 20,
+  connect_timeout: 30,
+  prepare: false, // 兼容 Supabase Transaction Pooler
 });
 
 // 创建 Drizzle 实例

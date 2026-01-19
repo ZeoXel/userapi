@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
       const newKey = {
         id: `key_${nanoid(9)}`,
         userId: userId,
+        userName: newUser.name, // 冗余字段
+        userPhone: newUser.phone, // 冗余字段
         keyHash,
         keyPrefix,
         name: '默认密钥',

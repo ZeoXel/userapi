@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { db, apiKeys, users } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
+import { getCachedResult, setCachedResult } from './cache';
 
 export interface VerifyResult {
   valid: boolean;
@@ -12,11 +13,8 @@ export interface VerifyResult {
   quotaRemaining?: number | null;
 }
 
-// Admin Key 前缀
-const ADMIN_KEY_PREFIX = 'ua_admin_';
-
 /**
- * 验证 API Key
+ * 验证 API Key（带缓存）
  */
 export async function verifyApiKey(authHeader: string): Promise<VerifyResult> {
   // 解析 Authorization header
@@ -30,10 +28,16 @@ export async function verifyApiKey(authHeader: string): Promise<VerifyResult> {
 
   const key = match[1];
 
+  // 检查缓存
+  const cachedResult = getCachedResult(key);
+  if (cachedResult) {
+    return cachedResult;
+  }
+
   // 检查是否是 Admin Key (Phase 1 简化版)
   const adminKey = process.env.ADMIN_API_KEY;
   if (adminKey && key === adminKey) {
-    return {
+    const result: VerifyResult = {
       valid: true,
       keyId: 'admin',
       userId: 'admin',
@@ -41,6 +45,8 @@ export async function verifyApiKey(authHeader: string): Promise<VerifyResult> {
       allowedProviders: null, // null 表示允许所有
       quotaRemaining: null, // null 表示无限制
     };
+    setCachedResult(key, result);
+    return result;
   }
 
   // 检查 Key 前缀格式
@@ -92,13 +98,13 @@ export async function verifyApiKey(authHeader: string): Promise<VerifyResult> {
           quotaRemaining = result.key.quotaLimit - (result.key.quotaUsed || 0);
         }
 
-        // 更新最后使用时间
-        await db
-          .update(apiKeys)
+        // 更新最后使用时间（异步，不阻塞响应）
+        db.update(apiKeys)
           .set({ lastUsedAt: new Date() })
-          .where(eq(apiKeys.id, result.key.id));
+          .where(eq(apiKeys.id, result.key.id))
+          .catch(console.error);
 
-        return {
+        const verifyResult: VerifyResult = {
           valid: true,
           keyId: result.key.id,
           userId: result.user.id,
@@ -106,6 +112,10 @@ export async function verifyApiKey(authHeader: string): Promise<VerifyResult> {
           allowedProviders,
           quotaRemaining,
         };
+
+        // 缓存验证结果
+        setCachedResult(key, verifyResult);
+        return verifyResult;
       }
     }
 
