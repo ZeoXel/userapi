@@ -12,6 +12,8 @@ import {
   Server,
   User,
   TrendingUp,
+  Coins,
+  Cpu,
 } from 'lucide-react';
 import { StatCard } from '@/components/ui/StatCard';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
@@ -59,6 +61,21 @@ interface UsageStats {
     createdAt: string;
     userName: string;
   }[];
+  credits: {
+    total: number;
+    transactions: number;
+    byProvider: {
+      provider: string;
+      credits: number;
+      count: number;
+    }[];
+    byModel: {
+      provider: string;
+      model: string;
+      credits: number;
+      count: number;
+    }[];
+  };
 }
 
 export default function UsagePage() {
@@ -167,7 +184,7 @@ export default function UsagePage() {
       </div>
 
       {/* 概览卡片 */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="总请求"
           value={overview.totalRequests.toLocaleString()}
@@ -187,16 +204,107 @@ export default function UsagePage() {
           iconBg="bg-gradient-to-br from-yellow-500 to-orange-500"
         />
         <StatCard
-          title="总消费"
+          title="积分消费"
+          value={(stats?.credits?.total || 0).toLocaleString()}
+          subtitle={`${stats?.credits?.transactions || 0} 笔交易`}
+          icon={<Coins className="w-5 h-5" />}
+          iconBg="bg-gradient-to-br from-purple-500 to-purple-600"
+        />
+        <StatCard
+          title="费用估算"
           value={`¥${(overview.totalCost || 0).toFixed(2)}`}
           icon={<DollarSign className="w-5 h-5" />}
-          iconBg="bg-gradient-to-br from-purple-500 to-purple-600"
+          iconBg="bg-gradient-to-br from-pink-500 to-rose-600"
         />
       </div>
 
-      {/* 厂商统计 */}
+      {/* 积分消费统计 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 按厂商统计积分 */}
+        <Card>
+          <CardHeader title="积分消费 - 按厂商" />
+          <CardContent noPadding>
+            <div className="divide-y divide-gray-100">
+              {(stats?.credits?.byProvider || []).map((item) => {
+                const maxCredits = Math.max(...(stats?.credits?.byProvider || []).map(p => p.credits));
+                const percentage = maxCredits > 0 ? (item.credits / maxCredits) * 100 : 0;
+                return (
+                  <div key={item.provider} className="px-6 py-4 hover:bg-gray-50/50 transition-colors">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Server className="w-4 h-4 text-gray-400" />
+                        <span className="font-medium text-gray-900">{item.provider}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-semibold text-gray-900">{item.credits.toLocaleString()}</span>
+                        <span className="text-xs text-gray-500 ml-2">({item.count} 笔)</span>
+                      </div>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              {(stats?.credits?.byProvider || []).length === 0 && (
+                <div className="px-6 py-12 text-center text-gray-500">
+                  <Coins className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                  <p>暂无积分消费记录</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 按模型统计积分 */}
+        <Card>
+          <CardHeader title="积分消费 - 按模型" />
+          <CardContent noPadding>
+            <div className="divide-y divide-gray-100">
+              {(stats?.credits?.byModel || []).slice(0, 10).map((item) => {
+                const maxCredits = Math.max(...(stats?.credits?.byModel || []).map(m => m.credits));
+                const percentage = maxCredits > 0 ? (item.credits / maxCredits) * 100 : 0;
+                return (
+                  <div key={`${item.provider}-${item.model}`} className="px-6 py-4 hover:bg-gray-50/50 transition-colors">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Cpu className="w-4 h-4 text-gray-400" />
+                        <div>
+                          <span className="font-medium text-gray-900">{item.model}</span>
+                          <span className="text-xs text-gray-500 ml-2">({item.provider})</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-semibold text-gray-900">{item.credits.toLocaleString()}</span>
+                        <span className="text-xs text-gray-500 ml-2">({item.count} 笔)</span>
+                      </div>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              {(stats?.credits?.byModel || []).length === 0 && (
+                <div className="px-6 py-12 text-center text-gray-500">
+                  <Cpu className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                  <p>暂无模型消费记录</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 厂商统计 - API 请求 */}
       <Card>
-        <CardHeader title="按厂商统计" />
+        <CardHeader title="API 请求 - 按厂商" />
         <CardContent noPadding>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200/50">
@@ -215,7 +323,7 @@ export default function UsagePage() {
                     平均延迟
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    消费
+                    费用
                   </th>
                 </tr>
               </thead>

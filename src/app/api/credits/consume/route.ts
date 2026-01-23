@@ -3,12 +3,34 @@ import { verifyApiKey } from '@/lib/auth/verify';
 import { db, apiKeys, creditTransactions } from '@/lib/db';
 import { eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { calculateCredits, UsageRequest } from '@/lib/pricing';
 
+/**
+ * 消费请求 - 支持两种模式：
+ * 1. 直接传 credits（向后兼容）
+ * 2. 传 usage 用量信息，由服务端计算 credits
+ */
 interface ConsumeRequest {
   service: 'video' | 'image' | 'audio' | 'chat';
   provider: string;
   model: string;
-  credits: number;
+  // 模式1：直接传积分（向后兼容）
+  credits?: number;
+  // 模式2：传用量信息
+  usage?: {
+    // 视频
+    durationSeconds?: number;
+    resolution?: string;
+    // 图像
+    imageCount?: number;
+    quality?: string;
+    // 音频
+    songCount?: number;
+    characterCount?: number;
+    // 对话
+    inputTokens?: number;
+    outputTokens?: number;
+  };
   metadata?: Record<string, unknown>;
 }
 
@@ -34,12 +56,48 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: ConsumeRequest = await request.json();
-    const { service, provider, model, credits, metadata } = body;
+    const { service, provider, model, credits: directCredits, usage, metadata } = body;
 
-    // 验证请求参数
-    if (!service || !provider || !model || typeof credits !== 'number' || credits <= 0) {
+    // 验证基础参数
+    if (!service || !provider || !model) {
       return NextResponse.json(
-        { error: 'Invalid request. Required: service, provider, model, credits (positive number)' },
+        { error: 'Invalid request. Required: service, provider, model' },
+        { status: 400 }
+      );
+    }
+
+    // 计算积分
+    let credits: number;
+
+    if (typeof directCredits === 'number' && directCredits > 0) {
+      // 模式1：直接传积分（向后兼容）
+      credits = directCredits;
+    } else if (usage) {
+      // 模式2：根据用量计算积分
+      const usageRequest: UsageRequest = {
+        service,
+        provider,
+        model,
+        durationSeconds: usage.durationSeconds,
+        resolution: usage.resolution,
+        imageCount: usage.imageCount,
+        quality: usage.quality,
+        songCount: usage.songCount,
+        characterCount: usage.characterCount,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+      };
+      credits = calculateCredits(usageRequest);
+
+      if (credits <= 0) {
+        return NextResponse.json(
+          { error: 'Could not calculate credits from usage. Check service/provider/model and usage parameters.' },
+          { status: 400 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        { error: 'Invalid request. Provide either "credits" (number > 0) or "usage" object.' },
         { status: 400 }
       );
     }
@@ -79,7 +137,6 @@ export async function POST(request: NextRequest) {
     const transaction = {
       id: transactionId,
       userId: result.userId!,
-      userName: result.userName, // 冗余字段便于查看
       keyId: result.keyId!,
       type: 'consumption',
       amount: credits,
@@ -87,7 +144,7 @@ export async function POST(request: NextRequest) {
       service,
       provider,
       model,
-      metadata: metadata ? JSON.stringify(metadata) : null,
+      metadata: metadata ? JSON.stringify(metadata) : (usage ? JSON.stringify(usage) : null),
       description: `${service} - ${provider}/${model}`,
     };
 
@@ -105,6 +162,16 @@ export async function POST(request: NextRequest) {
         credits,
         balance: Math.floor(balanceAfter),
       },
+      // 如果是用量计算模式，返回计算详情
+      ...(usage && {
+        calculation: {
+          service,
+          provider,
+          model,
+          usage,
+          calculatedCredits: credits,
+        },
+      }),
     });
   } catch (error) {
     console.error('Failed to consume credits:', error);

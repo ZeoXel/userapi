@@ -16,6 +16,7 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Coins,
 } from 'lucide-react';
 
 const navItems = [
@@ -23,6 +24,7 @@ const navItems = [
   { href: '/dashboard/providers', label: '厂商', icon: Server },
   { href: '/dashboard/users', label: '用户', icon: Users },
   { href: '/dashboard/usage', label: '使用统计', icon: BarChart3 },
+  { href: '/dashboard/pricing', label: '定价', icon: Coins },
 ];
 
 export default function DashboardLayout({

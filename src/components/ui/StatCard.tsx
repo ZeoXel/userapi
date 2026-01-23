@@ -7,6 +7,7 @@ import { ArrowRight } from 'lucide-react';
 interface StatCardProps {
   title: string;
   value: string | number;
+  subtitle?: string;
   icon: ReactNode;
   iconBg?: string;
   link?: string;
@@ -16,6 +17,7 @@ interface StatCardProps {
 export function StatCard({
   title,
   value,
+  subtitle,
   icon,
   iconBg = 'bg-blue-500/80',
   link,
@@ -33,6 +35,7 @@ export function StatCard({
           <div className="ml-4 flex-1">
             <p className="text-sm font-medium text-gray-500">{title}</p>
             <p className="text-2xl font-bold text-gray-900 mt-0.5">{value}</p>
+            {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
           </div>
         </div>
       </div>

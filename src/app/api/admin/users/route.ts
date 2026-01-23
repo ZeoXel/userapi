@@ -15,7 +15,7 @@ function verifyAdmin(request: NextRequest): boolean {
   return match[1] === adminKey;
 }
 
-// GET /api/admin/users - 获取用户列表（包含密钥信息）
+// GET /api/admin/users - 获取用户列表（包含密钥和积分信息）
 export async function GET(request: NextRequest) {
   if (!verifyAdmin(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     // 查询用户并 LEFT JOIN 密钥信息
     const allUsers = await db.select().from(users);
     const allKeys = await db.select({
+      id: apiKeys.id,
       userId: apiKeys.userId,
       keyPrefix: apiKeys.keyPrefix,
       status: apiKeys.status,
@@ -34,12 +35,17 @@ export async function GET(request: NextRequest) {
       lastUsedAt: apiKeys.lastUsedAt,
     }).from(apiKeys);
 
-    // 将密钥信息合并到用户数据
+    // 将密钥信息合并到用户数据，计算积分
     const usersWithKeys = allUsers.map(user => {
       const userKey = allKeys.find(k => k.userId === user.id);
+      const quotaLimit = userKey?.quotaLimit || 0;
+      const quotaUsed = userKey?.quotaUsed || 0;
+      const remaining = Math.max(0, quotaLimit - quotaUsed);
+
       return {
         ...user,
         apiKey: userKey ? {
+          id: userKey.id,
           keyPrefix: userKey.keyPrefix,
           status: userKey.status,
           quotaType: userKey.quotaType,
@@ -47,10 +53,24 @@ export async function GET(request: NextRequest) {
           quotaLimit: userKey.quotaLimit,
           lastUsedAt: userKey.lastUsedAt,
         } : null,
+        // 积分汇总信息
+        credits: {
+          total: quotaLimit,
+          used: quotaUsed,
+          remaining: remaining,
+        },
       };
     });
 
-    return NextResponse.json({ users: usersWithKeys });
+    // 计算平台汇总
+    const summary = {
+      totalUsers: allUsers.length,
+      activeUsers: allUsers.filter(u => u.status === 'active').length,
+      totalCredits: allKeys.reduce((sum, k) => sum + (k.quotaLimit || 0), 0),
+      usedCredits: allKeys.reduce((sum, k) => sum + (k.quotaUsed || 0), 0),
+    };
+
+    return NextResponse.json({ users: usersWithKeys, summary });
   } catch (error) {
     console.error('Database error:', error);
     return NextResponse.json(

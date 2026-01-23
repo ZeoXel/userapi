@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, usageLogs, users, apiKeys } from '@/lib/db';
-import { eq, sql, and, gte, lte, desc } from 'drizzle-orm';
+import { db, usageLogs, users, apiKeys, creditTransactions } from '@/lib/db';
+import { eq, sql, and, gte, desc } from 'drizzle-orm';
 
 // Admin 认证
 function verifyAdmin(request: NextRequest): boolean {
@@ -109,6 +109,47 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .offset(offset);
 
+    // ===== 积分消费统计（从 credit_transactions）=====
+    const creditConditions = [
+      gte(creditTransactions.createdAt, startDate),
+      eq(creditTransactions.type, 'consumption'),
+    ];
+
+    // 积分总体统计
+    const creditOverall = await db
+      .select({
+        totalCredits: sql<number>`coalesce(sum(abs(${creditTransactions.amount})), 0)`,
+        transactionCount: sql<number>`count(*)`,
+      })
+      .from(creditTransactions)
+      .where(and(...creditConditions));
+
+    // 按厂商统计积分消费
+    const creditsByProvider = await db
+      .select({
+        provider: creditTransactions.provider,
+        credits: sql<number>`sum(abs(${creditTransactions.amount}))`,
+        count: sql<number>`count(*)`,
+      })
+      .from(creditTransactions)
+      .where(and(...creditConditions))
+      .groupBy(creditTransactions.provider)
+      .orderBy(desc(sql`sum(abs(${creditTransactions.amount}))`));
+
+    // 按模型统计积分消费
+    const creditsByModel = await db
+      .select({
+        provider: creditTransactions.provider,
+        model: creditTransactions.model,
+        credits: sql<number>`sum(abs(${creditTransactions.amount}))`,
+        count: sql<number>`count(*)`,
+      })
+      .from(creditTransactions)
+      .where(and(...creditConditions))
+      .groupBy(creditTransactions.provider, creditTransactions.model)
+      .orderBy(desc(sql`sum(abs(${creditTransactions.amount}))`))
+      .limit(20);
+
     return NextResponse.json({
       period: {
         days,
@@ -130,6 +171,22 @@ export async function GET(request: NextRequest) {
         page,
         limit,
         hasMore: recentLogs.length === limit,
+      },
+      // 积分消费统计
+      credits: {
+        total: creditOverall[0]?.totalCredits || 0,
+        transactions: creditOverall[0]?.transactionCount || 0,
+        byProvider: creditsByProvider.filter(p => p.provider).map(p => ({
+          provider: p.provider,
+          credits: p.credits || 0,
+          count: p.count || 0,
+        })),
+        byModel: creditsByModel.filter(m => m.model).map(m => ({
+          provider: m.provider,
+          model: m.model,
+          credits: m.credits || 0,
+          count: m.count || 0,
+        })),
       },
     });
   } catch (error) {

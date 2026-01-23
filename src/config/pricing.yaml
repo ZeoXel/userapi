@@ -1,72 +1,200 @@
-# 积分定价配置
-# 基础单位：1 积分 = 0.01 元
+# 积分定价配置 (Single Source of Truth)
+# 基础单位：1 积分 ≈ 0.01 元
+#
+# USERAPI 网关为计费权威，ZeoCanvas 等前端平台
+# 只传用量信息，由 USERAPI 计算积分
 
-# 视频生成
+# ============================================
+# 视频生成 - 按时长计费（秒）
+# ============================================
 video:
   vidu:
-    # 按时长计费（秒）
-    viduq1:
-      per_second: 5        # 5 积分/秒
-      min_charge: 20       # 最低 20 积分
-    viduq2:
+    viduq2-turbo:
       per_second: 8
       min_charge: 32
+      resolution_multiplier:
+        480p: 0.6
+        720p: 1.0
+        1080p: 1.5
     viduq2-pro:
       per_second: 15
       min_charge: 60
+      resolution_multiplier:
+        480p: 0.6
+        720p: 1.0
+        1080p: 1.5
+    viduq2.5-turbo:
+      per_second: 12
+      min_charge: 48
+      resolution_multiplier:
+        480p: 0.6
+        720p: 1.0
+        1080p: 1.5
+    viduq2.5-pro:
+      per_second: 20
+      min_charge: 80
+      resolution_multiplier:
+        480p: 0.6
+        720p: 1.0
+        1080p: 1.5
+
+  seedance:
+    seedance-1.0-turbo:
+      per_second: 10
+      min_charge: 40
+      resolution_multiplier:
+        480p: 0.6
+        720p: 1.0
+        1080p: 1.5
+    seedance-1.0-pro:
+      per_second: 18
+      min_charge: 72
+      resolution_multiplier:
+        480p: 0.6
+        720p: 1.0
+        1080p: 1.5
+
+  veo:
+    veo3:
+      per_second: 25
+      min_charge: 100
+      resolution_multiplier:
+        480p: 0.5
+        720p: 1.0
+        1080p: 2.0
+    veo3.1:
+      per_second: 30
+      min_charge: 120
+      resolution_multiplier:
+        480p: 0.5
+        720p: 1.0
+        1080p: 2.0
+
   minimax:
     video-01:
       per_second: 10
       min_charge: 40
+      resolution_multiplier:
+        480p: 0.6
+        720p: 1.0
+        1080p: 1.5
     video-01-hd:
       per_second: 20
       min_charge: 80
+      resolution_multiplier:
+        480p: 0.6
+        720p: 1.0
+        1080p: 1.5
 
-# 图像生成
+# ============================================
+# 图像生成 - 按张计费
+# ============================================
 image:
+  seedream:
+    seedream-3.0:
+      per_image: 2
+      resolution_multiplier:
+        512x512: 0.5
+        1024x1024: 1.0
+        2048x2048: 2.0
+
+  nano-banana:
+    nano-banana:
+      per_image: 3
+      resolution_multiplier:
+        512x512: 0.5
+        1024x1024: 1.0
+        2048x2048: 2.0
+
   volcengine:
-    # 按张计费
     doubao-seedream-3-0-t2i-250415:
-      per_image: 2         # 2 积分/张
+      per_image: 2
     doubao-seedream-3-0-i2i-250415:
       per_image: 3
+
   openai:
     dall-e-3:
-      standard:
-        1024x1024: 8
-        1024x1792: 12
-        1792x1024: 12
-      hd:
-        1024x1024: 16
-        1024x1792: 24
-        1792x1024: 24
+      per_image: 8
+      quality_resolution:
+        standard:
+          1024x1024: 8
+          1024x1792: 12
+          1792x1024: 12
+        hd:
+          1024x1024: 16
+          1024x1792: 24
+          1792x1024: 24
 
+  gemini:
+    gemini-2.0-flash:
+      per_image: 5
+
+# ============================================
 # 音频生成
+# ============================================
 audio:
   suno:
-    # 按首计费
     chirp-v4:
-      per_song: 20
+      per_song: 50
+    chirp-v3.5:
+      per_song: 30
     chirp-v3:
       per_song: 15
 
-# 对话/文本
+  minimax:
+    speech-02-turbo:
+      per_k_chars: 2    # 每千字符
+    speech-02-hd:
+      per_k_chars: 5
+
+# ============================================
+# 对话/文本 - 按 Token 计费（每 1K tokens）
+# ============================================
 chat:
   openai:
-    # 按 token 计费（每 1K tokens）
     gpt-4o:
-      input_per_1k: 1
-      output_per_1k: 3
+      input_per_1k: 5
+      output_per_1k: 15
     gpt-4o-mini:
-      input_per_1k: 0.1
-      output_per_1k: 0.3
+      input_per_1k: 0.3
+      output_per_1k: 1.2
+    gpt-4-turbo:
+      input_per_1k: 10
+      output_per_1k: 30
+
+  gemini:
+    gemini-2.0-flash:
+      input_per_1k: 0.5
+      output_per_1k: 1.5
+    gemini-2.5-flash:
+      input_per_1k: 0.8
+      output_per_1k: 2.0
+    gemini-2.5-pro:
+      input_per_1k: 2.5
+      output_per_1k: 10
+
   volcengine:
     doubao-1-5-pro-256k:
       input_per_1k: 0.4
       output_per_1k: 1.2
 
-# 全局倍率（促销/加价）
+  anthropic:
+    claude-3-opus:
+      input_per_1k: 15
+      output_per_1k: 75
+    claude-3-sonnet:
+      input_per_1k: 3
+      output_per_1k: 15
+    claude-3-haiku:
+      input_per_1k: 0.25
+      output_per_1k: 1.25
+
+# ============================================
+# 全局倍率配置
+# ============================================
 multipliers:
   default: 1.0           # 默认倍率
+  # 可扩展：
   # vip: 0.8             # VIP 用户 8 折
   # peak_hours: 1.2      # 高峰时段 1.2 倍
+  # promotion: 0.5       # 促销 5 折
