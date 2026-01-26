@@ -122,6 +122,51 @@ export const creditTransactions = pgTable('credit_transactions', {
   index('credit_tx_service_idx').on(table.service, table.createdAt),
 ]);
 
+// 异步任务表 - 跟踪视频/音乐等长时任务
+export const tasks = pgTable('tasks', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  keyId: text('key_id').references(() => apiKeys.id, { onDelete: 'set null' }),
+  // ★ 冗余字段 - 方便查询展示
+  userName: text('user_name'),
+
+  // 任务标识
+  taskId: text('task_id').notNull(),           // 上游平台任务ID
+  platform: text('platform').notNull(),         // vidu, suno, kling, minimax...
+  action: text('action').notNull(),             // text2video, img2video, generate...
+
+  // 状态管理
+  status: text('status').notNull().default('submitted'),
+  // submitted → queued → in_progress → success/failure
+  progress: text('progress').default('0%'),
+  failReason: text('fail_reason'),
+
+  // 积分相关
+  quotaPreConsumed: integer('quota_pre_consumed').default(0),  // 预扣积分
+  quotaActual: integer('quota_actual'),                         // 实际消耗
+
+  // 时间戳
+  submitTime: timestamp('submit_time', { withTimezone: true }).notNull().defaultNow(),
+  startTime: timestamp('start_time', { withTimezone: true }),
+  finishTime: timestamp('finish_time', { withTimezone: true }),
+
+  // 任务数据
+  requestData: text('request_data'),            // JSON: 请求参数
+  responseData: text('response_data'),          // JSON: 响应结果
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  // 上游任务ID查询
+  index('tasks_task_id_idx').on(table.taskId),
+  // 用户任务列表
+  index('tasks_user_id_status_idx').on(table.userId, table.status),
+  // 平台任务查询（用于轮询）
+  index('tasks_platform_status_idx').on(table.platform, table.status),
+  // 时间排序
+  index('tasks_created_at_idx').on(table.createdAt),
+]);
+
 // 类型导出
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -133,3 +178,15 @@ export type ProviderKey = typeof providerKeys.$inferSelect;
 export type NewProviderKey = typeof providerKeys.$inferInsert;
 export type CreditTransaction = typeof creditTransactions.$inferSelect;
 export type NewCreditTransaction = typeof creditTransactions.$inferInsert;
+export type Task = typeof tasks.$inferSelect;
+export type NewTask = typeof tasks.$inferInsert;
+
+// 任务状态枚举
+export const TaskStatus = {
+  SUBMITTED: 'submitted',
+  QUEUED: 'queued',
+  IN_PROGRESS: 'in_progress',
+  SUCCESS: 'success',
+  FAILURE: 'failure',
+} as const;
+export type TaskStatusType = typeof TaskStatus[keyof typeof TaskStatus];

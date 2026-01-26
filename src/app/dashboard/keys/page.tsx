@@ -1,12 +1,10 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import {
   Key,
   Plus,
-  AlertCircle,
   X,
   CheckCircle2,
   XCircle,
@@ -16,37 +14,21 @@ import {
   Clock,
   Infinity,
 } from 'lucide-react';
+import { useKeys } from '@/hooks/use-keys';
+import { useUsers } from '@/hooks/use-users';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-
-interface ApiKey {
-  key: {
-    id: string;
-    keyPrefix: string;
-    name: string | null;
-    status: string;
-    allowedProviders: string | null;
-    quotaType: string;
-    quotaLimit: number | null;
-    quotaUsed: number;
-    lastUsedAt: string | null;
-    createdAt: string;
-  };
-  user: {
-    id: string;
-    name: string;
-  };
-}
+import { SkeletonTable } from '@/components/ui/skeleton';
 
 function KeysPageContent() {
   const searchParams = useSearchParams();
   const userIdFilter = searchParams.get('userId');
 
-  const [keys, setKeys] = useState<ApiKey[]>([]);
-  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { keys, isLoading, createdKey, createKey, revokeKey, clearCreatedKey } = useKeys(userIdFilter);
+  const { users } = useUsers();
+
   const [showCreate, setShowCreate] = useState(false);
   const [newKey, setNewKey] = useState({
     userId: userIdFilter || '',
@@ -54,88 +36,31 @@ function KeysPageContent() {
     quotaType: 'unlimited',
     quotaLimit: '',
   });
-  const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  const adminKey = typeof window !== 'undefined' ? localStorage.getItem('adminKey') || '' : '';
-
-  useEffect(() => {
-    if (adminKey) {
-      fetchKeys();
-      fetchUsers();
-    } else {
-      setLoading(false);
-    }
-  }, [adminKey, userIdFilter]);
-
-  const fetchKeys = async () => {
-    try {
-      const url = userIdFilter
-        ? `/api/admin/keys?userId=${userIdFilter}`
-        : '/api/admin/keys';
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${adminKey}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setKeys(data.keys);
-      }
-    } catch (error) {
-      console.error('Failed to fetch keys:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch('/api/admin/users', {
-        headers: { Authorization: `Bearer ${adminKey}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data.users);
-      }
-    } catch (error) {
-      console.error('Failed to fetch users:', error);
-    }
-  };
+  const [creating, setCreating] = useState(false);
 
   const handleCreateKey = async () => {
+    if (!newKey.userId) return;
+    setCreating(true);
     try {
-      const res = await fetch('/api/admin/keys', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${adminKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...newKey,
-          quotaLimit: newKey.quotaLimit ? parseInt(newKey.quotaLimit) : null,
-        }),
+      await createKey({
+        userId: newKey.userId,
+        name: newKey.name || undefined,
+        quotaType: newKey.quotaType,
+        quotaLimit: newKey.quotaLimit ? parseInt(newKey.quotaLimit) : null,
       });
-      if (res.ok) {
-        const data = await res.json();
-        setCreatedKey(data.key.fullKey);
-        setShowCreate(false);
-        fetchKeys();
-      }
-    } catch (error) {
-      console.error('Failed to create key:', error);
+      setShowCreate(false);
+      setNewKey({ userId: userIdFilter || '', name: '', quotaType: 'unlimited', quotaLimit: '' });
+    } catch {
+      // Error handled in hook
+    } finally {
+      setCreating(false);
     }
   };
 
   const handleRevokeKey = async (id: string) => {
     if (!confirm('确定吊销此 Key？吊销后无法恢复。')) return;
-    try {
-      await fetch(`/api/admin/keys/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${adminKey}` },
-      });
-      fetchKeys();
-    } catch (error) {
-      console.error('Failed to revoke key:', error);
-    }
+    await revokeKey(id);
   };
 
   const copyToClipboard = async (text: string) => {
@@ -143,34 +68,6 @@ function KeysPageContent() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  if (!adminKey) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Key 管理</h1>
-          <p className="mt-1 text-sm text-gray-500">管理所有 API Keys</p>
-        </div>
-        <Card className="border-yellow-200/60 bg-yellow-50/60">
-          <CardContent className="py-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-yellow-800">未配置 Admin Key</p>
-                <p className="text-sm text-yellow-700 mt-0.5">
-                  请先在
-                  <Link href="/dashboard/users" className="text-blue-600 hover:underline mx-1">
-                    用户管理
-                  </Link>
-                  页面配置 Admin API Key
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -212,7 +109,7 @@ function KeysPageContent() {
                 >
                   {copied ? '已复制' : '复制'}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setCreatedKey(null)}>
+                <Button size="sm" variant="ghost" onClick={clearCreatedKey}>
                   关闭
                 </Button>
               </div>
@@ -291,8 +188,8 @@ function KeysPageContent() {
                 >
                   取消
                 </Button>
-                <Button onClick={handleCreateKey} disabled={!newKey.userId}>
-                  创建
+                <Button onClick={handleCreateKey} disabled={!newKey.userId || creating}>
+                  {creating ? '创建中...' : '创建'}
                 </Button>
               </div>
             </CardContent>
@@ -301,13 +198,13 @@ function KeysPageContent() {
       )}
 
       {/* Key 列表 */}
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : (
-        <Card>
-          <CardContent noPadding>
+      <Card>
+        <CardContent noPadding>
+          {isLoading ? (
+            <div className="p-6">
+              <SkeletonTable rows={5} cols={6} />
+            </div>
+          ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200/50">
                 <thead className="bg-gray-50/50">
@@ -415,9 +312,9 @@ function KeysPageContent() {
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -430,9 +327,11 @@ export default function KeysPage() {
           <h1 className="text-2xl font-bold text-gray-900">Key 管理</h1>
           <p className="mt-1 text-sm text-gray-500">管理所有 API Keys</p>
         </div>
-        <div className="flex items-center justify-center py-12">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <Card>
+          <CardContent>
+            <SkeletonTable rows={5} cols={6} />
+          </CardContent>
+        </Card>
       </div>
     }>
       <KeysPageContent />

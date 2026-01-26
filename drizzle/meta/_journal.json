@@ -22,6 +22,13 @@
       "when": 1768817828115,
       "tag": "0002_add_user_name_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1769399412550,
+      "tag": "0003_fat_the_stranger",
+      "breakpoints": true
     }
   ]
 }

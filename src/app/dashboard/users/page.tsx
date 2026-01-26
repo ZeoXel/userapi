@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Users,
   Plus,
@@ -11,58 +11,35 @@ import {
   User as UserIcon,
   CheckCircle2,
   XCircle,
-  Save,
   Edit2,
   Coins,
   MoreVertical,
   Power,
   RefreshCw,
 } from 'lucide-react';
+import { useUsers, User, UserCredits } from '@/hooks/use-users';
+import { useAdminAuth } from '@/contexts/admin-auth';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-
-interface ApiKeyInfo {
-  id: string;
-  keyPrefix: string;
-  status: string;
-  quotaType: string;
-  quotaUsed: number | null;
-  quotaLimit: number | null;
-  lastUsedAt: string | null;
-}
-
-interface UserCredits {
-  total: number;
-  used: number;
-  remaining: number;
-}
-
-interface User {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  provider: string;
-  role: string;
-  status: string;
-  createdAt: string;
-  apiKey: ApiKeyInfo | null;
-  credits: UserCredits;
-}
-
-interface Summary {
-  totalUsers: number;
-  activeUsers: number;
-  totalCredits: number;
-  usedCredits: number;
-}
+import { SkeletonTable, SkeletonStats } from '@/components/ui/skeleton';
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { isAuthenticated } = useAdminAuth();
+  const {
+    users,
+    summary,
+    isLoading,
+    createUser,
+    updateUser,
+    deleteUser,
+    toggleUserStatus,
+    rechargeCredits,
+    getCreditsPercentage,
+    refresh,
+  } = useUsers();
+
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showRecharge, setShowRecharge] = useState(false);
@@ -70,63 +47,20 @@ export default function UsersPage() {
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'user' });
   const [rechargeAmount, setRechargeAmount] = useState('');
   const [rechargeDescription, setRechargeDescription] = useState('');
-  const [adminKey, setAdminKey] = useState('');
-  const [tempAdminKey, setTempAdminKey] = useState('');
   const [actionMenuUser, setActionMenuUser] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const key = localStorage.getItem('adminKey') || '';
-    setAdminKey(key);
-    setTempAdminKey(key);
-    if (key) {
-      fetchUsers(key);
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchUsers = async (key: string) => {
-    try {
-      const res = await fetch('/api/admin/users', {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data.users);
-        setSummary(data.summary);
-      }
-    } catch (error) {
-      console.error('Failed to fetch users:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveKey = () => {
-    localStorage.setItem('adminKey', tempAdminKey);
-    setAdminKey(tempAdminKey);
-    setLoading(true);
-    fetchUsers(tempAdminKey);
-  };
-
   const handleCreateUser = async () => {
+    if (!newUser.name) return;
+    setSaving(true);
     try {
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${adminKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newUser),
-      });
-      if (res.ok) {
-        setShowCreate(false);
-        setNewUser({ name: '', email: '', role: 'user' });
-        fetchUsers(adminKey);
-      }
-    } catch (error) {
-      console.error('Failed to create user:', error);
+      await createUser(newUser);
+      setShowCreate(false);
+      setNewUser({ name: '', email: '', role: 'user' });
+    } catch {
+      // Error handled in hook
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -140,46 +74,23 @@ export default function UsersPage() {
     if (!editingUser) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/admin/users/${editingUser.id}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${adminKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: editingUser.name,
-          email: editingUser.email,
-          phone: editingUser.phone,
-          role: editingUser.role,
-          status: editingUser.status,
-        }),
+      await updateUser(editingUser.id, {
+        name: editingUser.name,
+        email: editingUser.email ?? undefined,
+        phone: editingUser.phone ?? undefined,
+        role: editingUser.role,
+        status: editingUser.status,
       });
-      if (res.ok) {
-        setShowEdit(false);
-        fetchUsers(adminKey);
-      }
-    } catch (error) {
-      console.error('Failed to update user:', error);
+      setShowEdit(false);
+    } catch {
+      // Error handled in hook
     } finally {
       setSaving(false);
     }
   };
 
   const handleToggleStatus = async (user: User) => {
-    const newStatus = user.status === 'active' ? 'disabled' : 'active';
-    try {
-      await fetch(`/api/admin/users/${user.id}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${adminKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      fetchUsers(adminKey);
-    } catch (error) {
-      console.error('Failed to toggle status:', error);
-    }
+    await toggleUserStatus(user);
     setActionMenuUser(null);
   };
 
@@ -195,27 +106,10 @@ export default function UsersPage() {
     if (!editingUser || !rechargeAmount) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/credits/recharge', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${adminKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: editingUser.id,
-          amount: parseInt(rechargeAmount),
-          description: rechargeDescription || '管理员充值',
-        }),
-      });
-      if (res.ok) {
-        setShowRecharge(false);
-        fetchUsers(adminKey);
-      } else {
-        const error = await res.json();
-        alert(error.error || '充值失败');
-      }
+      await rechargeCredits(editingUser.id, parseInt(rechargeAmount), rechargeDescription);
+      setShowRecharge(false);
     } catch (error) {
-      console.error('Failed to recharge:', error);
+      alert(error instanceof Error ? error.message : '充值失败');
     } finally {
       setSaving(false);
     }
@@ -223,25 +117,11 @@ export default function UsersPage() {
 
   const handleDeleteUser = async (id: string) => {
     if (!confirm('确定删除此用户？此操作不可恢复。')) return;
-    try {
-      await fetch(`/api/admin/users/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${adminKey}` },
-      });
-      setUsers(users.filter((u) => u.id !== id));
-    } catch (error) {
-      console.error('Failed to delete user:', error);
-    }
+    await deleteUser(id);
     setActionMenuUser(null);
   };
 
-  // 计算积分使用百分比
-  const getCreditsPercentage = (credits: UserCredits) => {
-    if (credits.total === 0) return 0;
-    return Math.round((credits.used / credits.total) * 100);
-  };
-
-  if (!adminKey) {
+  if (!isAuthenticated) {
     return (
       <div className="space-y-6">
         <div>
@@ -250,26 +130,14 @@ export default function UsersPage() {
         </div>
         <Card className="border-yellow-200/60 bg-yellow-50/60">
           <CardContent className="py-6">
-            <div className="flex items-start gap-3 mb-4">
+            <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-yellow-800">请先配置 Admin API Key</p>
                 <p className="text-sm text-yellow-700 mt-0.5">
-                  Admin Key 用于管理用户和积分
+                  点击右上角设置按钮配置 Admin Key 以管理用户
                 </p>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <Input
-                type="password"
-                value={tempAdminKey}
-                onChange={(e) => setTempAdminKey(e.target.value)}
-                placeholder="输入 Admin API Key"
-                className="flex-1"
-              />
-              <Button onClick={handleSaveKey} icon={<Save className="w-4 h-4" />}>
-                保存
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -287,8 +155,9 @@ export default function UsersPage() {
         <div className="flex gap-2">
           <Button
             variant="ghost"
-            onClick={() => fetchUsers(adminKey)}
-            icon={<RefreshCw className="w-4 h-4" />}
+            onClick={() => refresh()}
+            disabled={isLoading}
+            icon={<RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />}
           >
             刷新
           </Button>
@@ -299,7 +168,9 @@ export default function UsersPage() {
       </div>
 
       {/* 汇总统计 */}
-      {summary && (
+      {isLoading && !summary ? (
+        <SkeletonStats count={4} />
+      ) : summary && (
         <div className="grid grid-cols-4 gap-4">
           <div className="p-4 bg-white rounded-xl border border-gray-200/60">
             <div className="text-xs text-gray-500 mb-1">总用户</div>
@@ -363,8 +234,8 @@ export default function UsersPage() {
                 <Button variant="ghost" onClick={() => setShowCreate(false)}>
                   取消
                 </Button>
-                <Button onClick={handleCreateUser} disabled={!newUser.name}>
-                  创建
+                <Button onClick={handleCreateUser} disabled={!newUser.name || saving}>
+                  {saving ? '创建中...' : '创建'}
                 </Button>
               </div>
             </CardContent>
@@ -491,13 +362,13 @@ export default function UsersPage() {
       )}
 
       {/* 用户列表 */}
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : (
-        <Card>
-          <CardContent noPadding>
+      <Card>
+        <CardContent noPadding>
+          {isLoading ? (
+            <div className="p-6">
+              <SkeletonTable rows={5} cols={6} />
+            </div>
+          ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200/50">
                 <thead className="bg-gray-50/50">
@@ -663,9 +534,9 @@ export default function UsersPage() {
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* 点击其他地方关闭菜单 */}
       {actionMenuUser && (

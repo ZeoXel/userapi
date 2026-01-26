@@ -36,7 +36,7 @@ async function testProvider(provider: Provider): Promise<TestResult> {
   try {
     // 根据不同厂商选择合适的测试端点
     let testUrl = provider.base_url;
-    let testMethod = 'GET';
+    const testMethod = 'GET';
 
     switch (provider.id) {
       case 'openai':

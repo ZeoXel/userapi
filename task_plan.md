@@ -1,63 +1,120 @@
-# Task Plan: 统一计费系统
+# Task Plan: USERAPI 用量/任务状态跟踪系统
 
 ## Goal
-将 USERAPI 作为计费权威，统一两个项目的定价逻辑，并添加前端价格管理界面。
+为 USERAPI 网关实现完整的异步任务状态跟踪系统，包括数据库设计、API 接口、轮询服务、预扣费机制，以及 ZeoCanvas 和 USERAPI 管理后台的前端 UI 组件。
 
 ## Phases
 
-### Phase 1: 更新 USERAPI 计费 API ✅
-- [x] 修改 `/api/credits/consume` 支持两种模式：传积分 / 传用量自动计算
-- [x] 完善 `pricing.yaml` 覆盖所有模型（视频/图像/音频/对话）
-- [x] 更新 `src/lib/pricing/index.ts` 计算逻辑（支持分辨率倍率）
+### Phase 1: 数据库设计 ✅
+- [x] 1.1 更新 schema.ts 添加 tasks 表
+- [ ] 1.2 生成并执行数据库迁移 (待部署时执行)
+- [x] 1.3 导出类型定义
 
-### Phase 2: 创建价格管理 API ✅
-- [x] `GET /api/admin/pricing` - 获取所有定价配置
-- [x] `PUT /api/admin/pricing` - 更新定价配置
-- [x] `POST /api/admin/pricing` - 积分计算预览
+### Phase 2: 核心任务 API ✅
+- [x] 2.1 创建 `/api/v1/tasks` 路由 (GET/POST)
+- [x] 2.2 创建 `/api/v1/tasks/[taskId]` 路由 (GET/PATCH)
+- [x] 2.3 创建任务管理核心模块 `src/lib/tasks/index.ts`
 
-### Phase 3: 前端价格管理页面 ✅
-- [x] 创建 `/dashboard/pricing` 页面
-- [x] 视频/图像/音频/对话四类定价编辑
-- [x] 全局倍率配置
-- [x] 积分计算器
+### Phase 3: 预扣费机制 ✅
+- [x] 3.1 创建 `src/lib/quota/preConsume.ts`
+- [x] 3.2 实现预扣费、返还、调整函数
+- [x] 3.3 集成到任务创建流程
 
-### Phase 4: 更新 ZeoCanvas 调用方式 ✅
-- [x] 修改 `consumptionTracker.ts` 传用量而非积分
-- [x] `creditsPricing.ts` 添加废弃说明
+### Phase 4: 轮询服务 ✅
+- [x] 4.1 创建平台适配器 `src/lib/tasks/platforms/`
+- [x] 4.2 实现轮询逻辑 `src/lib/tasks/polling.ts`
+- [x] 4.3 创建 Cron 端点 `/api/cron/poll-tasks`
+- [x] 4.4 配置 vercel.json Cron
 
-### Phase 5: 测试验证 ✅
-- [x] USERAPI 构建验证
-- [x] ZeoCanvas 构建验证
+### Phase 5: ZeoCanvas 前端 ✅
+- [x] 5.1 创建 taskService.ts 服务
+- [x] 5.2 创建 useTaskPolling.ts Hook
+- [x] 5.3 创建 TaskStatusPanel 组件
+- [x] 5.4 TaskItem 和 TaskProgress 已整合到 TaskStatusPanel
+- [x] 5.5 集成到用户中心页面 (UserDashboard)
+
+### Phase 6: USERAPI 管理后台 ✅
+- [x] 6.1 创建 `/api/admin/tasks` 管理 API
+- [x] 6.2 创建 `/dashboard/tasks` 页面
+- [ ] 6.3 添加任务统计到 Dashboard 概览 (可选)
+
+### Phase 7: 集成与测试 ✅
+- [x] 7.1 USERAPI 构建验证 ✅
+- [x] 7.2 ZeoCanvas 构建验证 ✅
+- [x] 7.3 更新文档 (task_plan.md)
+
+## Architecture
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    ZeoCanvas (用户端)                        │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ TaskStatusPanel → useTaskPolling → taskService      │   │
+│  └─────────────────────────────────────────────────────┘   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ GET/POST /api/v1/tasks
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                      USERAPI 网关                            │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐               │
+│  │ 任务 API  │  │ 预扣费    │  │ Cron轮询  │               │
+│  │ /v1/tasks │  │ preConsume│  │ poll-tasks│               │
+│  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘               │
+│        │              │              │                       │
+│        └──────────────┼──────────────┘                       │
+│                       ↓                                      │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                   tasks 表                           │   │
+│  │  id | taskId | platform | status | progress | quota  │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                       ↓                                      │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │             平台适配器 (vidu, suno, ...)             │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │         管理后台 /dashboard/tasks                     │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Task Status Flow
+```
+SUBMITTED ──→ QUEUED ──→ IN_PROGRESS ──→ SUCCESS
+                    │                       │
+                    └──→ FAILURE ←──────────┘
+```
 
 ## Key Decisions
-1. **USERAPI 为计费权威**：`pricing.yaml` 为唯一定价来源
-2. **向后兼容**：`/api/credits/consume` 支持两种模式
-   - 模式1：直接传 `credits`（旧方式，向后兼容）
-   - 模式2：传 `usage` 对象，服务端自动计算
-3. **前端管理**：通过 `/dashboard/pricing` 可视化管理定价
+1. **任务状态**: submitted → queued → in_progress → success/failure
+2. **轮询频率**: Vercel Cron 每分钟，前端每5秒
+3. **预扣费**: 任务提交时预扣，成功时调整差额，失败时全额返还
+4. **平台适配**: 使用适配器模式，支持 vidu/suno/minimax 等
 
-## 架构变化
-
-### Before
-```
-ZeoCanvas                          USERAPI
-┌──────────────────┐              ┌──────────────────┐
-│ creditsPricing.ts │              │ pricing.yaml     │
-│ (计算积分)        │  ────────>   │ (重复定价配置)   │
-│                  │  传 credits  │                  │
-└──────────────────┘              └──────────────────┘
-```
-
-### After
-```
-ZeoCanvas                          USERAPI
-┌──────────────────┐              ┌──────────────────┐
-│ consumptionTracker│              │ pricing.yaml     │
-│ (传用量信息)      │  ────────>   │ (唯一定价来源)   │
-│                  │  传 usage    │ pricing/index.ts │
-└──────────────────┘              │ (计算积分)       │
-                                  └──────────────────┘
-```
+## Errors Encountered
+(执行过程中记录)
 
 ## Status
-**✅ 全部完成**
+**COMPLETED** - 所有阶段已完成，两个项目构建验证通过
+
+## Files Created/Modified
+
+### USERAPI
+- `src/lib/db/schema.ts` - 添加 tasks 表
+- `src/lib/tasks/index.ts` - 任务管理核心模块
+- `src/lib/quota/preConsume.ts` - 预扣费机制
+- `src/lib/tasks/platforms/index.ts` - 平台适配器
+- `src/lib/tasks/polling.ts` - 轮询服务
+- `src/app/api/v1/tasks/route.ts` - 任务列表 API
+- `src/app/api/v1/tasks/[taskId]/route.ts` - 单任务 API
+- `src/app/api/cron/poll-tasks/route.ts` - Cron 轮询端点
+- `src/app/api/admin/tasks/route.ts` - 管理 API
+- `src/app/dashboard/tasks/page.tsx` - 管理后台任务页面
+- `src/app/dashboard/layout.tsx` - 添加任务导航
+- `vercel.json` - Cron 配置
+
+### ZeoCanvas
+- `src/services/taskService.ts` - 任务服务
+- `src/hooks/useTaskPolling.ts` - 任务轮询 Hook
+- `src/components/tasks/TaskStatusPanel.tsx` - 任务状态面板
+- `src/components/tasks/index.ts` - 组件导出
+- `src/components/user/UserDashboard.tsx` - 集成任务面板

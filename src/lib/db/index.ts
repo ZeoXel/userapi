@@ -11,10 +11,10 @@ if (!connectionString) {
 
 // 创建 PostgreSQL 连接 (Serverless + Supabase Pooler)
 const client = postgres(connectionString, {
-  ssl: 'require',
-  max: 1,
-  idle_timeout: 20,
-  connect_timeout: 30,
+  ssl: { rejectUnauthorized: false },
+  max: 10,  // 增加连接池大小
+  idle_timeout: 30,
+  connect_timeout: 10,  // 缩短连接超时
   prepare: false, // 兼容 Supabase Transaction Pooler
 });
 

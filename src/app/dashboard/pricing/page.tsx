@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import {
   Coins,
   Video,
   Image,
   Music,
   MessageSquare,
-  AlertCircle,
   Save,
   RefreshCw,
   Plus,
@@ -18,22 +16,9 @@ import {
   Check,
   X,
 } from 'lucide-react';
+import { usePricing, ServiceType, PricingItem, Multipliers } from '@/hooks/use-pricing';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-
-type ServiceType = 'video' | 'image' | 'audio' | 'chat';
-
-interface PricingItem {
-  service: string;
-  provider: string;
-  model: string;
-  pricing: Record<string, unknown>;
-}
-
-interface Multipliers {
-  default: number;
-  [key: string]: number;
-}
+import { SkeletonTable, SkeletonCard } from '@/components/ui/skeleton';
 
 const serviceIcons: Record<ServiceType, typeof Video> = {
   video: Video,
@@ -57,65 +42,39 @@ const serviceColors: Record<ServiceType, string> = {
 };
 
 export default function PricingPage() {
-  const [pricingList, setPricingList] = useState<PricingItem[]>([]);
-  const [multipliers, setMultipliers] = useState<Multipliers>({ default: 1.0 });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const {
+    pricingList,
+    multipliers,
+    isLoading,
+    updateMultipliers,
+    updateModel,
+    deleteModel,
+    calculateCredits,
+    getByService,
+    groupByProvider,
+    refresh,
+  } = usePricing();
+
   const [activeTab, setActiveTab] = useState<ServiceType>('video');
   const [editingItem, setEditingItem] = useState<PricingItem | null>(null);
   const [showCalculator, setShowCalculator] = useState(false);
   const [editingMultipliers, setEditingMultipliers] = useState(false);
   const [tempMultipliers, setTempMultipliers] = useState<Multipliers>({ default: 1.0 });
+  const [saving, setSaving] = useState(false);
 
-  const adminKey = typeof window !== 'undefined' ? localStorage.getItem('adminKey') || '' : '';
-
-  useEffect(() => {
-    if (adminKey) {
-      fetchPricing();
-    } else {
-      setLoading(false);
-    }
-  }, [adminKey]);
-
-  const fetchPricing = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/admin/pricing?format=list', {
-        headers: { Authorization: `Bearer ${adminKey}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPricingList(data.list || []);
-        setMultipliers(data.multipliers || { default: 1.0 });
-        setTempMultipliers(data.multipliers || { default: 1.0 });
-      }
-    } catch (error) {
-      console.error('Failed to fetch pricing:', error);
-    } finally {
-      setLoading(false);
-    }
+  // 开始编辑时初始化临时倍率
+  const startEditingMultipliers = () => {
+    setTempMultipliers(multipliers);
+    setEditingMultipliers(true);
   };
 
   const handleSaveMultipliers = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/pricing', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminKey}`,
-        },
-        body: JSON.stringify({
-          action: 'update_multipliers',
-          multipliers: tempMultipliers,
-        }),
-      });
-      if (res.ok) {
-        setMultipliers(tempMultipliers);
-        setEditingMultipliers(false);
-      }
-    } catch (error) {
-      console.error('Failed to save multipliers:', error);
+      await updateMultipliers(tempMultipliers);
+      setEditingMultipliers(false);
+    } catch {
+      // Error handled in hook
     } finally {
       setSaving(false);
     }
@@ -124,26 +83,10 @@ export default function PricingPage() {
   const handleSaveModel = async (item: PricingItem, newPricing: Record<string, unknown>) => {
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/pricing', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminKey}`,
-        },
-        body: JSON.stringify({
-          action: 'update_model',
-          service: item.service,
-          provider: item.provider,
-          model: item.model,
-          pricing: newPricing,
-        }),
-      });
-      if (res.ok) {
-        await fetchPricing();
-        setEditingItem(null);
-      }
-    } catch (error) {
-      console.error('Failed to save model:', error);
+      await updateModel(item, newPricing);
+      setEditingItem(null);
+    } catch {
+      // Error handled in hook
     } finally {
       setSaving(false);
     }
@@ -151,81 +94,11 @@ export default function PricingPage() {
 
   const handleDeleteModel = async (item: PricingItem) => {
     if (!confirm(`确定要删除 ${item.provider}/${item.model} 的定价配置吗？`)) return;
-
-    try {
-      const res = await fetch('/api/admin/pricing', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminKey}`,
-        },
-        body: JSON.stringify({
-          action: 'delete_model',
-          service: item.service,
-          provider: item.provider,
-          model: item.model,
-        }),
-      });
-      if (res.ok) {
-        await fetchPricing();
-      }
-    } catch (error) {
-      console.error('Failed to delete model:', error);
-    }
+    await deleteModel(item);
   };
 
-  const filteredList = pricingList.filter(item => item.service === activeTab);
-
-  // 按 provider 分组
-  const groupedByProvider: Record<string, PricingItem[]> = {};
-  filteredList.forEach(item => {
-    if (!groupedByProvider[item.provider]) {
-      groupedByProvider[item.provider] = [];
-    }
-    groupedByProvider[item.provider].push(item);
-  });
-
-  if (!adminKey) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">定价管理</h1>
-          <p className="mt-1 text-sm text-gray-500">配置各服务的积分定价</p>
-        </div>
-        <Card className="border-yellow-200/60 bg-yellow-50/60">
-          <CardContent className="py-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-yellow-800">未配置 Admin Key</p>
-                <p className="text-sm text-yellow-700 mt-0.5">
-                  请先在
-                  <Link href="/dashboard/users" className="text-blue-600 hover:underline mx-1">
-                    用户管理
-                  </Link>
-                  页面配置 Admin API Key
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">定价管理</h1>
-          <p className="mt-1 text-sm text-gray-500">配置各服务的积分定价</p>
-        </div>
-        <div className="flex items-center justify-center py-12">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      </div>
-    );
-  }
+  const filteredList = getByService(activeTab);
+  const groupedByProvider = groupByProvider(filteredList);
 
   return (
     <div className="space-y-6">
@@ -244,10 +117,11 @@ export default function PricingPage() {
             计算器
           </button>
           <button
-            onClick={fetchPricing}
+            onClick={() => refresh()}
+            disabled={isLoading}
             className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
@@ -280,7 +154,7 @@ export default function PricingPage() {
               </div>
             ) : (
               <button
-                onClick={() => setEditingMultipliers(true)}
+                onClick={startEditingMultipliers}
                 className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
               >
                 <Settings2 className="w-3.5 h-3.5" />
@@ -290,40 +164,44 @@ export default function PricingPage() {
           }
         />
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {Object.entries(editingMultipliers ? tempMultipliers : multipliers).map(([key, value]) => (
-              <div key={key} className="p-4 bg-gray-50/80 rounded-xl">
-                <div className="text-xs text-gray-500 mb-1">
-                  {key === 'default' ? '默认倍率' : key}
+          {isLoading ? (
+            <SkeletonCard lines={2} />
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {Object.entries(editingMultipliers ? tempMultipliers : multipliers).map(([key, value]) => (
+                <div key={key} className="p-4 bg-gray-50/80 rounded-xl">
+                  <div className="text-xs text-gray-500 mb-1">
+                    {key === 'default' ? '默认倍率' : key}
+                  </div>
+                  {editingMultipliers ? (
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={tempMultipliers[key] || 1}
+                      onChange={(e) => setTempMultipliers({ ...tempMultipliers, [key]: parseFloat(e.target.value) || 1 })}
+                      className="w-full px-2 py-1 border border-gray-200 rounded-lg text-lg font-semibold text-gray-900"
+                    />
+                  ) : (
+                    <div className="text-lg font-semibold text-gray-900">{value}x</div>
+                  )}
                 </div>
-                {editingMultipliers ? (
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={tempMultipliers[key] || 1}
-                    onChange={(e) => setTempMultipliers({ ...tempMultipliers, [key]: parseFloat(e.target.value) || 1 })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded-lg text-lg font-semibold text-gray-900"
-                  />
-                ) : (
-                  <div className="text-lg font-semibold text-gray-900">{value}x</div>
-                )}
-              </div>
-            ))}
-            {editingMultipliers && (
-              <button
-                onClick={() => {
-                  const name = prompt('输入新倍率名称（如 vip, promotion）：');
-                  if (name && !tempMultipliers[name]) {
-                    setTempMultipliers({ ...tempMultipliers, [name]: 1.0 });
-                  }
-                }}
-                className="p-4 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
-            )}
-          </div>
+              ))}
+              {editingMultipliers && (
+                <button
+                  onClick={() => {
+                    const name = prompt('输入新倍率名称（如 vip, promotion）：');
+                    if (name && !tempMultipliers[name]) {
+                      setTempMultipliers({ ...tempMultipliers, [name]: 1.0 });
+                    }
+                  }}
+                  className="p-4 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -331,7 +209,7 @@ export default function PricingPage() {
       <div className="flex gap-2 overflow-x-auto pb-2">
         {(['video', 'image', 'audio', 'chat'] as ServiceType[]).map((service) => {
           const Icon = serviceIcons[service];
-          const count = pricingList.filter(p => p.service === service).length;
+          const count = getByService(service).length;
           return (
             <button
               key={service}
@@ -355,46 +233,57 @@ export default function PricingPage() {
       </div>
 
       {/* 定价列表 */}
-      <div className="space-y-4">
-        {Object.entries(groupedByProvider).map(([provider, items]) => (
-          <Card key={provider}>
-            <CardHeader title={provider} />
-            <CardContent noPadding>
-              <div className="divide-y divide-gray-100">
-                {items.map((item) => (
-                  <PricingItemRow
-                    key={`${item.provider}-${item.model}`}
-                    item={item}
-                    isEditing={editingItem?.model === item.model && editingItem?.provider === item.provider}
-                    onEdit={() => setEditingItem(item)}
-                    onCancel={() => setEditingItem(null)}
-                    onSave={(newPricing) => handleSaveModel(item, newPricing)}
-                    onDelete={() => handleDeleteModel(item)}
-                    saving={saving}
-                  />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      {isLoading ? (
+        <Card>
+          <CardContent>
+            <SkeletonTable rows={5} cols={3} />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {Object.entries(groupedByProvider).map(([provider, items]) => (
+            <Card key={provider}>
+              <CardHeader title={provider} />
+              <CardContent noPadding>
+                <div className="divide-y divide-gray-100">
+                  {items.map((item) => {
+                    const isEditing = editingItem?.model === item.model && editingItem?.provider === item.provider;
+                    return (
+                      <PricingItemRow
+                        key={`${item.provider}-${item.model}-${isEditing ? 'edit' : 'view'}`}
+                        item={item}
+                        isEditing={isEditing}
+                        onEdit={() => setEditingItem(item)}
+                        onCancel={() => setEditingItem(null)}
+                        onSave={(newPricing) => handleSaveModel(item, newPricing)}
+                        onDelete={() => handleDeleteModel(item)}
+                        saving={saving}
+                      />
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
 
-        {Object.keys(groupedByProvider).length === 0 && (
-          <Card>
-            <CardContent>
-              <div className="text-center py-8 text-gray-500">
-                <Coins className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                <p>暂无 {serviceLabels[activeTab]} 定价配置</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+          {Object.keys(groupedByProvider).length === 0 && (
+            <Card>
+              <CardContent>
+                <div className="text-center py-8 text-gray-500">
+                  <Coins className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                  <p>暂无 {serviceLabels[activeTab]} 定价配置</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* 积分计算器弹窗 */}
       {showCalculator && (
         <CreditsCalculator
-          adminKey={adminKey}
           onClose={() => setShowCalculator(false)}
+          calculateCredits={calculateCredits}
         />
       )}
     </div>
@@ -419,11 +308,8 @@ function PricingItemRow({
   onDelete: () => void;
   saving: boolean;
 }) {
+  // 使用 key 重置组件，所以可以直接从 props 初始化
   const [editPricing, setEditPricing] = useState<Record<string, unknown>>(item.pricing);
-
-  useEffect(() => {
-    setEditPricing(item.pricing);
-  }, [item.pricing, isEditing]);
 
   const formatPricingDisplay = (pricing: Record<string, unknown>) => {
     const parts: string[] = [];
@@ -478,7 +364,7 @@ function PricingItemRow({
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {Object.entries(editPricing).map(([key, value]) => {
-            if (typeof value === 'object') return null; // 跳过嵌套对象
+            if (typeof value === 'object') return null;
             return (
               <div key={key}>
                 <label className="block text-xs text-gray-500 mb-1">{key}</label>
@@ -525,11 +411,11 @@ function PricingItemRow({
 
 // 积分计算器组件
 function CreditsCalculator({
-  adminKey,
   onClose,
+  calculateCredits,
 }: {
-  adminKey: string;
   onClose: () => void;
+  calculateCredits: (service: string, provider: string, model: string, usage: Record<string, unknown>) => Promise<number>;
 }) {
   const [service, setService] = useState<ServiceType>('video');
   const [provider, setProvider] = useState('vidu');
@@ -557,19 +443,8 @@ function CreditsCalculator({
         usageData.outputTokens = usage.outputTokens || 500;
       }
 
-      const res = await fetch('/api/admin/pricing', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminKey}`,
-        },
-        body: JSON.stringify({ service, provider, model, usage: usageData }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setResult(data.calculatedCredits);
-      }
+      const credits = await calculateCredits(service, provider, model, usageData);
+      setResult(credits);
     } catch (error) {
       console.error('Failed to calculate:', error);
     } finally {
