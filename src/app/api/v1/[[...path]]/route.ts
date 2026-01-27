@@ -3,6 +3,7 @@ import { verifyApiKey } from '@/lib/auth/verify';
 import { matchProvider, getProviders } from '@/lib/proxy/router';
 import { forwardRequest } from '@/lib/proxy/forwarder';
 import { logUsage } from '@/lib/proxy/logger';
+import { detectAndCreateTask } from '@/lib/tasks/detector';
 
 export const maxDuration = 300; // 5分钟超时
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,6 @@ async function handleRequest(
   request: NextRequest,
   { params }: { params: Promise<{ path?: string[] }> }
 ) {
-  const startTime = Date.now();
   const resolvedParams = await params;
   const pathParts = resolvedParams.path || [];
   const fullPath = '/' + pathParts.join('/');
@@ -99,14 +99,39 @@ async function handleRequest(
     );
   }
 
-  // 5. 透传请求
+  // 5. 读取请求体（用于任务检测）
+  let requestBody: unknown = null;
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    try {
+      const clonedRequest = request.clone();
+      requestBody = await clonedRequest.json();
+    } catch {
+      // 非 JSON 请求体，忽略
+    }
+  }
+
+  // 6. 透传请求
   const result = await forwardRequest({
     request,
     provider,
     targetPath,
   });
 
-  // 6. 记录使用日志
+  // 7. 检测并创建异步任务记录（成功响应才检测）
+  if (result.status >= 200 && result.status < 300) {
+    await detectAndCreateTask({
+      provider: provider.id,
+      targetPath,
+      method: request.method,
+      response: result.response,
+      userId: keyResult.userId!,
+      keyId: keyResult.keyId,
+      userName: keyResult.userName,
+      requestBody,
+    });
+  }
+
+  // 8. 记录使用日志
   await logUsage({
     keyId: keyResult.keyId!,
     userId: keyResult.userId!,
