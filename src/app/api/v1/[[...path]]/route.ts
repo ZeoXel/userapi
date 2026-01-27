@@ -4,6 +4,7 @@ import { matchProvider, getProviders } from '@/lib/proxy/router';
 import { forwardRequest } from '@/lib/proxy/forwarder';
 import { logUsage } from '@/lib/proxy/logger';
 import { detectAndCreateTask } from '@/lib/tasks/detector';
+import { autoCharge } from '@/lib/billing/auto-charge';
 
 export const maxDuration = 300; // 5分钟超时
 export const dynamic = 'force-dynamic';
@@ -117,7 +118,21 @@ async function handleRequest(
     targetPath,
   });
 
-  // 7. 检测并创建异步任务记录（成功响应才检测）
+  // 7. 自动计费（成功响应才计费）
+  if (result.status >= 200 && result.status < 300) {
+    await autoCharge({
+      provider: provider.id,
+      targetPath,
+      method: request.method,
+      requestBody,
+      response: result.response,
+      userId: keyResult.userId!,
+      keyId: keyResult.keyId,
+      userName: keyResult.userName,
+    });
+  }
+
+  // 8. 检测并创建任务记录（成功响应才检测）
   if (result.status >= 200 && result.status < 300) {
     await detectAndCreateTask({
       provider: provider.id,
@@ -131,7 +146,7 @@ async function handleRequest(
     });
   }
 
-  // 8. 记录使用日志
+  // 9. 记录使用日志
   await logUsage({
     keyId: keyResult.keyId!,
     userId: keyResult.userId!,
